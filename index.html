@@ -19,86 +19,41 @@
     <button id="readNfcButton">Считать NFC-метку</button>
     
     <div class="result" id="result">
-      <p id="fio"></p>
-      <p id="school"></p>
-      <p id="city"></p>
-      <p id="class"></p>
-      <span id="status"></span>
+      <p id="status"></p>
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/build/cipher-core.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/build/aes.js"></script>
   <script>
-    const secretKey = "your-secret-key"; // секретный ключ для шифрования
-
-    // Тестовые данные для шифрования
-    const testData = {
-      fio: "Иванов Иван Иванович",
-      school: "Школа №25",
-      city: "Воронеж",
-      class: "10А"
-    };
-
-    // Функция для шифрования данных
-    function encryptData(data) {
-      return CryptoJS.AES.encrypt(JSON.stringify(data), secretKey).toString();
+    // Проверяем поддержку Web NFC API
+    if ("NFC" in window) {
+      console.log("Web NFC API доступно в вашем браузере!");
+    } else {
+      alert("Ваш браузер не поддерживает Web NFC API.");
     }
 
-    // Функция для дешифрования данных
-    function decryptData(encryptedData) {
-      const bytes = CryptoJS.AES.decrypt(encryptedData, secretKey);
-      return JSON.parse(bytes.toString(CryptoJS.enc.Utf8));
-    }
-
-    // Функция для отображения данных
-    function displayData(data) {
-      document.getElementById('fio').textContent = "ФИО: " + data.fio;
-      document.getElementById('school').textContent = "Школа: " + data.school;
-      document.getElementById('city').textContent = "Город: " + data.city;
-      document.getElementById('class').textContent = "Класс: " + data.class;
-      document.getElementById('status').textContent = "✔️ Данные успешно считаны";
-      document.getElementById('status').classList.add('valid');
-    }
-
-    // Пример: шифруем данные и выводим на экран
-    const encryptedData = encryptData(testData);
-
-    // Дешифруем данные (например, когда NFC-метка считывается)
-    const decryptedData = decryptData(encryptedData);
-    console.log(decryptedData);
-
-    // Обработчик кнопки считывания NFC
     document.getElementById('readNfcButton').addEventListener('click', async () => {
       try {
-        if ("NFC" in window) {
-          const reader = new NFCReader();
-          const nfcData = await reader.read(); // имитируем чтение NFC-данных
-          const decryptedNfcData = decryptData(nfcData);
-          displayData(decryptedNfcData);
+        if ("NDEFReader" in window) {
+          // Создаем объект NDEFReader для чтения NFC
+          const reader = new NDEFReader();
+          await reader.scan();
+          console.log("Сканирование NFC начато!");
+
+          // Слушаем событие, когда NFC-метка будет считана
+          reader.addEventListener("message", event => {
+            const record = event.message.records[0];
+            const text = new TextDecoder().decode(record.data);
+            document.getElementById('status').textContent = "Считанные данные: " + text;
+            console.log("Считанные данные: ", text);
+          });
         } else {
-          alert("Ваш браузер не поддерживает NFC.");
+          alert("NDEFReader не доступен в вашем браузере.");
         }
       } catch (error) {
         document.getElementById('status').textContent = "❌ Ошибка при считывании NFC.";
-        document.getElementById('status').classList.add('error');
+        console.error("Ошибка при считывании NFC", error);
       }
     });
-
-    // Имитация считывания NFC данных
-    class NFCReader {
-      async read() {
-        try {
-          // Симуляция данных, полученных с NFC
-          const nfcData = encryptedData; // Предположим, что NFC-метка возвращает зашифрованные данные
-          console.log("NFC Data: ", nfcData);
-          return nfcData; // возвращаем зашифрованные данные
-        } catch (error) {
-          console.error("Ошибка при считывании NFC", error);
-          throw new Error("Не удалось считать NFC-метку.");
-        }
-      }
-    }
   </script>
 </body>
 </html>
