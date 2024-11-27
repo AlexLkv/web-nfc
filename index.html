@@ -25,10 +25,9 @@
             background-color: lightgreen;
             color: green;
         }
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
+        .status-box.error {
+            background-color: lightcoral;
+            color: white;
         }
         .info {
             margin-top: 20px;
@@ -44,12 +43,11 @@
 <body>
     <h1>NFC Reader with Encryption</h1>
     <div class="status-box" id="status-box">⬜</div>
-    <button id="read-nfc">Scan NFC Card</button>
-    <div id="output" class="info"></div>
+    <div id="output" class="info">Waiting for NFC scan...</div>
     <script>
         // AES-256-GCM helpers
         const getKey = async () => {
-            const password = "your-secure-password"; // Защищённый пароль
+            const password = "your-secure-password"; // Секретный пароль
             const encoder = new TextEncoder();
             const passwordData = encoder.encode(password);
             return crypto.subtle.importKey(
@@ -72,17 +70,17 @@
             return new TextDecoder().decode(decrypted);
         };
 
-        document.getElementById('read-nfc').addEventListener('click', async () => {
+        const startNFCReader = async () => {
             const statusBox = document.getElementById('status-box');
             const output = document.getElementById('output');
 
             if ('NDEFReader' in window) {
                 try {
-                    const key = await getKey();
+                    const key = await getKey(); // Генерация ключа до начала чтения
                     const ndef = new NDEFReader();
                     await ndef.scan();
 
-                    output.innerHTML = 'Waiting for NFC card...';
+                    output.textContent = 'Waiting for NFC card...';
                     ndef.onreading = async (event) => {
                         const decoder = new TextDecoder();
                         for (const record of event.message.records) {
@@ -95,7 +93,7 @@
                                     const decryptedJson = await decryptData(cipherText, iv, key);
                                     const studentInfo = JSON.parse(decryptedJson);
 
-                                    // Обновление UI
+                                    // Успешное считывание
                                     statusBox.textContent = '✔️';
                                     statusBox.classList.add('success');
                                     output.innerHTML = `
@@ -105,6 +103,8 @@
                                         <p><strong>Класс:</strong> ${studentInfo.grade}</p>
                                     `;
                                 } catch (error) {
+                                    statusBox.textContent = '❌';
+                                    statusBox.classList.add('error');
                                     output.textContent = 'Decryption failed: Invalid data.';
                                 }
                             } else {
@@ -113,12 +113,19 @@
                         }
                     };
                 } catch (error) {
+                    statusBox.textContent = '❌';
+                    statusBox.classList.add('error');
                     output.textContent = `Error: ${error.message}`;
                 }
             } else {
+                statusBox.textContent = '❌';
+                statusBox.classList.add('error');
                 output.textContent = 'Web NFC is not supported in this browser.';
             }
-        });
+        };
+
+        // Автоматический запуск NFC-чтения при загрузке страницы
+        document.addEventListener('DOMContentLoaded', startNFCReader);
     </script>
 </body>
 </html>
