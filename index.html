@@ -60,78 +60,77 @@
         };
 
         const decryptData = async (cipherText, iv, key) => {
-            try {
-                const cipherBuffer = Uint8Array.from(atob(cipherText), (c) => c.charCodeAt(0));
-                const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
-                const decrypted = await crypto.subtle.decrypt(
-                    { name: "AES-GCM", iv: ivBuffer },
-                    key,
-                    cipherBuffer
-                );
-                return new TextDecoder().decode(decrypted);
-            } catch (error) {
-                throw new Error('Failed to decrypt data: ' + error.message);
-            }
+            const cipherBuffer = Uint8Array.from(atob(cipherText), (c) => c.charCodeAt(0));
+            const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
+            const decrypted = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBuffer },
+                key,
+                cipherBuffer
+            );
+            return new TextDecoder().decode(decrypted);
         };
 
         const startNFCReader = async () => {
             const statusBox = document.getElementById('status-box');
             const output = document.getElementById('output');
 
-            if (!('NDEFReader' in window)) {
+            // Генерация ключа до начала чтения
+            let key;
+            try {
+                key = await getKey();
+            } catch (error) {
                 statusBox.textContent = '❌';
                 statusBox.classList.add('error');
-                output.textContent = 'Web NFC is not supported in this browser.';
+                output.textContent = 'Error generating AES key: ' + error.message;
                 return;
             }
 
-            try {
-                // Генерация ключа
-                const key = await getKey();
+            if ('NDEFReader' in window) {
+                try {
+                    const ndef = new NDEFReader();
+                    await ndef.scan();
 
-                // Запуск NFC-считывателя
-                const ndef = new NDEFReader();
-                await ndef.scan();
+                    output.textContent = 'Waiting for NFC card...';
+                    ndef.onreading = async (event) => {
+                        const decoder = new TextDecoder();
+                        for (const record of event.message.records) {
+                            if (record.recordType === 'text') {
+                                const jsonData = decoder.decode(record.data);
 
-                output.textContent = 'Waiting for NFC card...';
-                ndef.onreading = async (event) => {
-                    const decoder = new TextDecoder();
-                    for (const record of event.message.records) {
-                        if (record.recordType === 'text') {
-                            const jsonData = decoder.decode(record.data);
+                                try {
+                                    // Расшифровка данных
+                                    const { cipherText, iv } = JSON.parse(jsonData);
+                                    const decryptedJson = await decryptData(cipherText, iv, key);
+                                    const studentInfo = JSON.parse(decryptedJson);
 
-                            try {
-                                // Расшифровка данных
-                                const { cipherText, iv } = JSON.parse(jsonData);
-                                const decryptedJson = await decryptData(cipherText, iv, key);
-                                const studentInfo = JSON.parse(decryptedJson);
-
-                                // Успешное считывание
-                                statusBox.textContent = '✔️';
-                                statusBox.classList.remove('error');
-                                statusBox.classList.add('success');
-                                output.innerHTML = `
-                                    <p><strong>ФИО:</strong> ${studentInfo.name}</p>
-                                    <p><strong>Школа:</strong> ${studentInfo.school}</p>
-                                    <p><strong>Город:</strong> ${studentInfo.city}</p>
-                                    <p><strong>Класс:</strong> ${studentInfo.grade}</p>
-                                `;
-                            } catch (error) {
-                                // Ошибка расшифровки
-                                statusBox.textContent = '❌';
-                                statusBox.classList.add('error');
-                                output.textContent = 'Decryption failed: Invalid data.';
+                                    // Успешное считывание
+                                    statusBox.textContent = '✔️';
+                                    statusBox.classList.add('success');
+                                    output.innerHTML = `
+                                        <p><strong>ФИО:</strong> ${studentInfo.name}</p>
+                                        <p><strong>Школа:</strong> ${studentInfo.school}</p>
+                                        <p><strong>Город:</strong> ${studentInfo.city}</p>
+                                        <p><strong>Класс:</strong> ${studentInfo.grade}</p>
+                                    `;
+                                } catch (error) {
+                                    statusBox.textContent = '❌';
+                                    statusBox.classList.add('error');
+                                    output.textContent = 'Decryption failed: Invalid data.';
+                                }
+                            } else {
+                                output.textContent = `Unsupported record type: ${record.recordType}`;
                             }
-                        } else {
-                            output.textContent = `Unsupported record type: ${record.recordType}`;
                         }
-                    }
-                };
-            } catch (error) {
-                // Общая ошибка
+                    };
+                } catch (error) {
+                    statusBox.textContent = '❌';
+                    statusBox.classList.add('error');
+                    output.textContent = `Error: ${error.message}`;
+                }
+            } else {
                 statusBox.textContent = '❌';
                 statusBox.classList.add('error');
-                output.textContent = `Error: ${error.message}`;
+                output.textContent = 'Web NFC is not supported in this browser.';
             }
         };
 
