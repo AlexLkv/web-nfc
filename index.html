@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFC Reader - Student Info</title>
+    <title>NFC Reader with Encryption</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -42,35 +42,62 @@
     </style>
 </head>
 <body>
-    <h1>NFC Reader - Student Info</h1>
+    <h1>NFC Reader with Encryption</h1>
     <div class="status-box" id="status-box">⬜</div>
     <button id="read-nfc">Scan NFC Card</button>
     <div id="output" class="info"></div>
     <script>
+        // AES-256-GCM helpers
+        const getKey = async () => {
+            const password = "your-secure-password"; // Защищённый пароль
+            const encoder = new TextEncoder();
+            const passwordData = encoder.encode(password);
+            return crypto.subtle.importKey(
+                "raw",
+                passwordData,
+                { name: "AES-GCM" },
+                false,
+                ["encrypt", "decrypt"]
+            );
+        };
+
+        const decryptData = async (cipherText, iv, key) => {
+            const cipherBuffer = Uint8Array.from(atob(cipherText), (c) => c.charCodeAt(0));
+            const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
+            const decrypted = await crypto.subtle.decrypt(
+                { name: "AES-GCM", iv: ivBuffer },
+                key,
+                cipherBuffer
+            );
+            return new TextDecoder().decode(decrypted);
+        };
+
         document.getElementById('read-nfc').addEventListener('click', async () => {
             const statusBox = document.getElementById('status-box');
             const output = document.getElementById('output');
 
             if ('NDEFReader' in window) {
                 try {
+                    const key = await getKey();
                     const ndef = new NDEFReader();
                     await ndef.scan();
-                    output.innerHTML = 'Waiting for NFC card...';
 
-                    ndef.onreading = (event) => {
+                    output.innerHTML = 'Waiting for NFC card...';
+                    ndef.onreading = async (event) => {
                         const decoder = new TextDecoder();
                         for (const record of event.message.records) {
                             if (record.recordType === 'text') {
                                 const jsonData = decoder.decode(record.data);
 
                                 try {
-                                    // Парсим JSON
-                                    const studentInfo = JSON.parse(jsonData);
+                                    // Расшифровка данных
+                                    const { cipherText, iv } = JSON.parse(jsonData);
+                                    const decryptedJson = await decryptData(cipherText, iv, key);
+                                    const studentInfo = JSON.parse(decryptedJson);
 
-                                    // Обновляем UI
+                                    // Обновление UI
                                     statusBox.textContent = '✔️';
                                     statusBox.classList.add('success');
-
                                     output.innerHTML = `
                                         <p><strong>ФИО:</strong> ${studentInfo.name}</p>
                                         <p><strong>Школа:</strong> ${studentInfo.school}</p>
@@ -78,7 +105,7 @@
                                         <p><strong>Класс:</strong> ${studentInfo.grade}</p>
                                     `;
                                 } catch (error) {
-                                    output.textContent = 'Error: Invalid JSON data.';
+                                    output.textContent = 'Decryption failed: Invalid data.';
                                 }
                             } else {
                                 output.textContent = `Unsupported record type: ${record.recordType}`;
