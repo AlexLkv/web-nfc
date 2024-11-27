@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NFC Reader with Decryption</title>
+    <title>NFC Reader - Student Info</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -30,78 +30,58 @@
             font-size: 16px;
             cursor: pointer;
         }
-        p {
+        .info {
             margin-top: 20px;
+            text-align: left;
+            display: inline-block;
             font-size: 18px;
+        }
+        .info p {
+            margin: 5px 0;
         }
     </style>
 </head>
 <body>
-    <h1>NFC Reader with Decryption</h1>
+    <h1>NFC Reader - Student Info</h1>
     <div class="status-box" id="status-box">⬜</div>
     <button id="read-nfc">Scan NFC Card</button>
-    <p id="output">Waiting for NFC scan...</p>
+    <div id="output" class="info"></div>
     <script>
-        // AES-256-GCM helpers
-        const getKey = async () => {
-            const password = "your-secure-password"; // Секретный пароль для ключа
-            const encoder = new TextEncoder();
-            const passwordData = encoder.encode(password);
-            return crypto.subtle.importKey(
-                "raw",
-                passwordData,
-                { name: "AES-GCM" },
-                false, // Неэкспортируемый ключ
-                ["encrypt", "decrypt"]
-            );
-        };
-
-        const decryptData = async (cipherText, iv, key) => {
-            // Преобразование данных из Base64 в Uint8Array
-            const cipherBuffer = Uint8Array.from(atob(cipherText), (c) => c.charCodeAt(0));
-            const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
-
-            // Расшифровка
-            const decrypted = await crypto.subtle.decrypt(
-                { name: "AES-GCM", iv: ivBuffer },
-                key,
-                cipherBuffer
-            );
-            return new TextDecoder().decode(decrypted);
-        };
-
-        // NFC reading logic
         document.getElementById('read-nfc').addEventListener('click', async () => {
-            const output = document.getElementById('output');
             const statusBox = document.getElementById('status-box');
+            const output = document.getElementById('output');
 
             if ('NDEFReader' in window) {
                 try {
-                    const key = await getKey(); // Получаем ключ для дешифровки
                     const ndef = new NDEFReader();
                     await ndef.scan();
+                    output.innerHTML = 'Waiting for NFC card...';
 
-                    output.textContent = 'NFC scan started. Approach a card to read.';
-                    ndef.onreading = async (event) => {
+                    ndef.onreading = (event) => {
                         const decoder = new TextDecoder();
                         for (const record of event.message.records) {
                             if (record.recordType === 'text') {
                                 const jsonData = decoder.decode(record.data);
 
                                 try {
-                                    // Парсим JSON и дешифруем
-                                    const { cipherText, iv } = JSON.parse(jsonData);
-                                    const decryptedText = await decryptData(cipherText, iv, key);
+                                    // Парсим JSON
+                                    const studentInfo = JSON.parse(jsonData);
 
-                                    // Обновление интерфейса
+                                    // Обновляем UI
                                     statusBox.textContent = '✔️';
                                     statusBox.classList.add('success');
-                                    output.textContent = `Decrypted Text: ${decryptedText}`;
-                                } catch (e) {
-                                    output.textContent = `Decryption failed: ${e.message}`;
+
+                                    output.innerHTML = `
+                                        <p><strong>ФИО:</strong> ${studentInfo.name}</p>
+                                        <p><strong>Школа:</strong> ${studentInfo.school}</p>
+                                        <p><strong>Город:</strong> ${studentInfo.city}</p>
+                                        <p><strong>Класс:</strong> ${studentInfo.grade}</p>
+                                    `;
+                                } catch (error) {
+                                    output.textContent = 'Error: Invalid JSON data.';
                                 }
                             } else {
-                                output.textContent = `Record type ${record.recordType} is not supported.`;
+                                output.textContent = `Unsupported record type: ${record.recordType}`;
                             }
                         }
                     };
