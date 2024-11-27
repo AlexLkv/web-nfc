@@ -1,59 +1,97 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Считывание NFC-метки</title>
-  <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
-    .container { width: 50%; margin: 0 auto; padding-top: 20px; }
-    .result { margin-top: 20px; }
-    .valid { color: green; font-size: 24px; }
-    .error { color: red; }
-    p { font-size: 18px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NFC Reader - Student Info</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+        .status-box {
+            width: 100px;
+            height: 100px;
+            margin: 20px auto;
+            background-color: lightgray;
+            border: 2px solid black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 48px;
+        }
+        .status-box.success {
+            background-color: lightgreen;
+            color: green;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .info {
+            margin-top: 20px;
+            text-align: left;
+            display: inline-block;
+            font-size: 18px;
+        }
+        .info p {
+            margin: 5px 0;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Считывание NFC-метки</h1>
-    <button id="readNfcButton">Считать NFC-метку</button>
-    
-    <div class="result" id="result">
-      <p id="status"></p>
-    </div>
-  </div>
+    <h1>NFC Reader - Student Info</h1>
+    <div class="status-box" id="status-box">⬜</div>
+    <button id="read-nfc">Scan NFC Card</button>
+    <div id="output" class="info"></div>
+    <script>
+        document.getElementById('read-nfc').addEventListener('click', async () => {
+            const statusBox = document.getElementById('status-box');
+            const output = document.getElementById('output');
 
-  <script>
-    // Проверяем поддержку Web NFC API
-    if ("NFC" in window) {
-      console.log("Web NFC API доступно в вашем браузере!");
-    } else {
-      alert("Ваш браузер не поддерживает Web NFC API.");
-    }
+            if ('NDEFReader' in window) {
+                try {
+                    const ndef = new NDEFReader();
+                    await ndef.scan();
+                    output.innerHTML = 'Waiting for NFC card...';
 
-    document.getElementById('readNfcButton').addEventListener('click', async () => {
-      try {
-        if ("NDEFReader" in window) {
-          // Создаем объект NDEFReader для чтения NFC
-          const reader = new NDEFReader();
-          await reader.scan();
-          console.log("Сканирование NFC начато!");
+                    ndef.onreading = (event) => {
+                        const decoder = new TextDecoder();
+                        for (const record of event.message.records) {
+                            if (record.recordType === 'text') {
+                                const jsonData = decoder.decode(record.data);
 
-          // Слушаем событие, когда NFC-метка будет считана
-          reader.addEventListener("message", event => {
-            const record = event.message.records[0];
-            const text = new TextDecoder().decode(record.data);
-            document.getElementById('status').textContent = "Считанные данные: " + text;
-            console.log("Считанные данные: ", text);
-          });
-        } else {
-          alert("NDEFReader не доступен в вашем браузере.");
-        }
-      } catch (error) {
-        document.getElementById('status').textContent = "❌ Ошибка при считывании NFC.";
-        console.error("Ошибка при считывании NFC", error);
-      }
-    });
-  </script>
+                                try {
+                                    // Парсим JSON
+                                    const studentInfo = JSON.parse(jsonData);
+
+                                    // Обновляем UI
+                                    statusBox.textContent = '✔️';
+                                    statusBox.classList.add('success');
+
+                                    output.innerHTML = `
+                                        <p><strong>ФИО:</strong> ${studentInfo.name}</p>
+                                        <p><strong>Школа:</strong> ${studentInfo.school}</p>
+                                        <p><strong>Город:</strong> ${studentInfo.city}</p>
+                                        <p><strong>Класс:</strong> ${studentInfo.grade}</p>
+                                    `;
+                                } catch (error) {
+                                    output.textContent = 'Error: Invalid JSON data.';
+                                }
+                            } else {
+                                output.textContent = `Unsupported record type: ${record.recordType}`;
+                            }
+                        }
+                    };
+                } catch (error) {
+                    output.textContent = `Error: ${error.message}`;
+                }
+            } else {
+                output.textContent = 'Web NFC is not supported in this browser.';
+            }
+        });
+    </script>
 </body>
 </html>
