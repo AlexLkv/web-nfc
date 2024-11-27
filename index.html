@@ -44,20 +44,24 @@
     <script>
         // AES-256-GCM helpers
         const getKey = async () => {
-            // Генерация постоянного ключа (в реальных условиях ключ должен быть защищённым и постоянным)
-            const keyMaterial = new TextEncoder().encode("your-secure-password");
+            const password = "your-secure-password"; // Секретный пароль для ключа
+            const encoder = new TextEncoder();
+            const passwordData = encoder.encode(password);
             return crypto.subtle.importKey(
                 "raw",
-                keyMaterial,
+                passwordData,
                 { name: "AES-GCM" },
-                false,
+                false, // Неэкспортируемый ключ
                 ["encrypt", "decrypt"]
             );
         };
 
         const decryptData = async (cipherText, iv, key) => {
+            // Преобразование данных из Base64 в Uint8Array
             const cipherBuffer = Uint8Array.from(atob(cipherText), (c) => c.charCodeAt(0));
             const ivBuffer = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
+
+            // Расшифровка
             const decrypted = await crypto.subtle.decrypt(
                 { name: "AES-GCM", iv: ivBuffer },
                 key,
@@ -85,7 +89,7 @@
                                 const jsonData = decoder.decode(record.data);
 
                                 try {
-                                    // Расшифровка данных
+                                    // Парсим JSON и дешифруем
                                     const { cipherText, iv } = JSON.parse(jsonData);
                                     const decryptedText = await decryptData(cipherText, iv, key);
 
